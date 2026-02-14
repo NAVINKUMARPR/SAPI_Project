@@ -1,0 +1,59 @@
+CREATE TABLE IF NOT EXISTS students (
+  id SERIAL PRIMARY KEY,
+  roll_no VARCHAR(50) UNIQUE NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(120) UNIQUE NOT NULL,
+  department VARCHAR(100) NOT NULL,
+  semester INTEGER NOT NULL CHECK (semester > 0),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS faculty (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(120) UNIQUE NOT NULL,
+  department VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS subjects (
+  id SERIAL PRIMARY KEY,
+  code VARCHAR(30) UNIQUE NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  semester INTEGER NOT NULL CHECK (semester > 0),
+  faculty_id INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(120) UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'faculty', 'student')),
+  student_id INTEGER UNIQUE REFERENCES students(id) ON DELETE CASCADE,
+  faculty_id INTEGER UNIQUE REFERENCES faculty(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS marks (
+  id SERIAL PRIMARY KEY,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  marks_obtained NUMERIC(5,2) NOT NULL CHECK (marks_obtained >= 0),
+  max_marks NUMERIC(5,2) NOT NULL CHECK (max_marks > 0),
+  exam_type VARCHAR(50) DEFAULT 'Internal',
+  entered_by INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS attendance (
+  id SERIAL PRIMARY KEY,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  attended_classes INTEGER NOT NULL CHECK (attended_classes >= 0),
+  total_classes INTEGER NOT NULL CHECK (total_classes > 0),
+  updated_by INTEGER REFERENCES faculty(id) ON DELETE SET NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (student_id, subject_id)
+);
