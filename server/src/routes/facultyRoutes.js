@@ -1,5 +1,8 @@
 import express from "express";
-import { query } from "../config/db.js";
+import Subject from "../models/Subject.js";
+import Student from "../models/Student.js";
+import Mark from "../models/Mark.js";
+import Attendance from "../models/Attendance.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 import {
   computeAttendancePercentage,
@@ -13,15 +16,11 @@ router.use(authenticate, authorize("faculty"));
 
 router.get("/subjects", async (req, res) => {
   try {
-    const result = await query(
-      `SELECT id, code, name, semester
-       FROM subjects
-       WHERE faculty_id = $1
-       ORDER BY id DESC`,
-      [req.user.facultyId]
-    );
+    const subjects = await Subject.find({ facultyId: req.user.facultyId })
+      .sort({ _id: -1 })
+      .lean();
 
-    return res.json(result.rows);
+    return res.json(subjects.map(s => ({ ...s, id: s._id })));
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Failed to fetch subjects" });
@@ -36,14 +35,16 @@ router.post("/marks", async (req, res) => {
       return res.status(400).json({ message: "Required fields are missing" });
     }
 
-    const result = await query(
-      `INSERT INTO marks (student_id, subject_id, marks_obtained, max_marks, exam_type, entered_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, student_id, subject_id, marks_obtained, max_marks, exam_type`,
-      [studentId, subjectId, marksObtained, maxMarks, examType || "Internal", req.user.facultyId]
-    );
+    const mark = await Mark.create({
+      student_id: studentId,
+      subject_id: subjectId,
+      marks_obtained: marksObtained,
+      max_marks: maxMarks,
+      exam_type: examType || "Internal",
+      entered_by: req.user.facultyId
+    });
 
-    return res.status(201).json(result.rows[0]);
+    return res.status(201).json({ ...mark.toObject(), id: mark._id });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Failed to add marks" });
@@ -58,19 +59,17 @@ router.post("/attendance", async (req, res) => {
       return res.status(400).json({ message: "Required fields are missing" });
     }
 
-    const result = await query(
-      `INSERT INTO attendance (student_id, subject_id, attended_classes, total_classes, updated_by)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (student_id, subject_id)
-       DO UPDATE SET attended_classes = EXCLUDED.attended_classes,
-                     total_classes = EXCLUDED.total_classes,
-                     updated_by = EXCLUDED.updated_by,
-                     updated_at = CURRENT_TIMESTAMP
-       RETURNING id, student_id, subject_id, attended_classes, total_classes`,
-      [studentId, subjectId, attendedClasses, totalClasses, req.user.facultyId]
+    const attendance = await Attendance.findOneAndUpdate(
+      { student_id: studentId, subject_id: subjectId },
+      {
+        attended_classes: attendedClasses,
+        total_classes: totalClasses,
+        updated_by: req.user.facultyId
+      },
+      { new: true, upsert: true, runValidators: true }
     );
 
-    return res.status(201).json(result.rows[0]);
+    return res.status(201).json({ ...attendance.toObject(), id: attendance._id });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Failed to update attendance" });
@@ -79,12 +78,8 @@ router.post("/attendance", async (req, res) => {
 
 router.get("/students", async (_, res) => {
   try {
-    const result = await query(
-      `SELECT id, roll_no, name, email, department, semester
-       FROM students
-       ORDER BY id DESC`
-    );
-    return res.json(result.rows);
+    const students = await Student.find().sort({ _id: -1 }).lean();
+    return res.json(students.map(s => ({ ...s, id: s._id })));
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Failed to fetch students" });
@@ -95,46 +90,53 @@ router.get("/reports/:studentId", async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    const [studentResult, marksResult, attendanceResult] = await Promise.all([
-      query("SELECT id, roll_no, name FROM students WHERE id = $1", [studentId]),
-      query(
-        `SELECT m.subject_id, s.name AS subject_name, m.marks_obtained, m.max_marks,
-                ROUND((m.marks_obtained::numeric / NULLIF(m.max_marks, 0)) * 100, 2) AS marks_percentage
-         FROM marks m
-         JOIN subjects s ON s.id = m.subject_id
-         WHERE m.student_id = $1
-         ORDER BY m.id DESC`,
-        [studentId]
-      ),
-      query(
-        `SELECT a.subject_id, s.name AS subject_name, a.attended_classes, a.total_classes,
-                ROUND((a.attended_classes::numeric / NULLIF(a.total_classes, 0)) * 100, 2) AS attendance_percentage
-         FROM attendance a
-         JOIN subjects s ON s.id = a.subject_id
-         WHERE a.student_id = $1`,
-        [studentId]
-      )
-    ]);
-
-    if (!studentResult.rows[0]) {
+    const student = await Student.findById(studentId).lean();
+    if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    const markPercentages = marksResult.rows.map((m) => Number(m.marks_percentage || 0));
+    const [marks, attendance] = await Promise.all([
+      Mark.find({ student_id: studentId }).populate("subject_id", "name").sort({ _id: -1 }).lean(),
+      Attendance.find({ student_id: studentId }).populate("subject_id", "name").lean()
+    ]);
+
+    const formattedMarks = marks.map(m => {
+      const percentage = m.max_marks ? ((m.marks_obtained / m.max_marks) * 100).toFixed(2) : 0;
+      return {
+        subject_id: m.subject_id?._id,
+        subject_name: m.subject_id?.name,
+        marks_obtained: m.marks_obtained,
+        max_marks: m.max_marks,
+        marks_percentage: percentage
+      };
+    });
+
+    const formattedAttendance = attendance.map(a => {
+      const percentage = a.total_classes ? ((a.attended_classes / a.total_classes) * 100).toFixed(2) : 0;
+      return {
+        subject_id: a.subject_id?._id,
+        subject_name: a.subject_id?.name,
+        attended_classes: a.attended_classes,
+        total_classes: a.total_classes,
+        attendance_percentage: percentage
+      };
+    });
+
+    const markPercentages = formattedMarks.map(m => Number(m.marks_percentage || 0));
     const avgMarks = markPercentages.length
       ? Number((markPercentages.reduce((sum, m) => sum + m, 0) / markPercentages.length).toFixed(2))
       : 0;
 
-    const totalAttended = attendanceResult.rows.reduce((sum, row) => sum + Number(row.attended_classes || 0), 0);
-    const totalClasses = attendanceResult.rows.reduce((sum, row) => sum + Number(row.total_classes || 0), 0);
+    const totalAttended = formattedAttendance.reduce((sum, row) => sum + Number(row.attended_classes || 0), 0);
+    const totalClasses = formattedAttendance.reduce((sum, row) => sum + Number(row.total_classes || 0), 0);
     const attendancePercentage = computeAttendancePercentage(totalAttended, totalClasses);
 
     const performanceScore = computeOverallScore(avgMarks, attendancePercentage);
 
     return res.json({
-      student: studentResult.rows[0],
-      marks: marksResult.rows,
-      attendance: attendanceResult.rows,
+      student: { ...student, id: student._id },
+      marks: formattedMarks,
+      attendance: formattedAttendance,
       metrics: {
         averageMarks: avgMarks,
         attendancePercentage,
