@@ -29,8 +29,8 @@ function FacultyDashboard() {
     e.preventDefault();
     await api.post("/faculty/marks", {
       ...markForm,
-      studentId: Number(markForm.studentId),
-      subjectId: Number(markForm.subjectId),
+      studentId: markForm.studentId,
+      subjectId: markForm.subjectId,
       marksObtained: Number(markForm.marksObtained),
       maxMarks: Number(markForm.maxMarks)
     });
@@ -41,8 +41,8 @@ function FacultyDashboard() {
     e.preventDefault();
     await api.post("/faculty/attendance", {
       ...attendanceForm,
-      studentId: Number(attendanceForm.studentId),
-      subjectId: Number(attendanceForm.subjectId),
+      studentId: attendanceForm.studentId,
+      subjectId: attendanceForm.subjectId,
       attendedClasses: Number(attendanceForm.attendedClasses),
       totalClasses: Number(attendanceForm.totalClasses)
     });

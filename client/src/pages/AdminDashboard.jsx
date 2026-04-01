@@ -58,7 +58,7 @@ function AdminDashboard() {
     e.preventDefault();
     await api.post("/admin/subjects", {
       ...subjectForm,
-      facultyId: subjectForm.facultyId ? Number(subjectForm.facultyId) : null
+      facultyId: subjectForm.facultyId ? subjectForm.facultyId : null
     });
     setSubjectForm({ code: "", name: "", semester: 1, facultyId: "" });
     await loadAll();
