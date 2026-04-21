@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: sapi-server
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm run start
+    autoDeploy: true
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 1d

@@ -1,4 +1,10 @@
 {
+  "private": true,
+  "scripts": {
+    "dev": "start \"SAPI API\" cmd /k \"cd /d server && npm run dev\" && start \"SAPI Client\" cmd /k \"cd /d client && npm run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev"
+  },
   "dependencies": {
     "mongodb": "^7.1.1"
   }

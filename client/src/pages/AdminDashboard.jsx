@@ -24,18 +24,44 @@ function AdminDashboard() {
     setLoading(true);
     setError("");
     try {
-      const [d, s, f, sub] = await Promise.all([
+      const [dashboardResult, studentsResult, facultyResult, subjectsResult] = await Promise.allSettled([
         api.get("/admin/dashboard"),
         api.get("/admin/students"),
         api.get("/admin/faculty"),
         api.get("/admin/subjects")
       ]);
-      setDashboard(d.data);
-      setStudents(s.data);
-      setFaculty(f.data);
-      setSubjects(sub.data);
+
+      const errors = [];
+
+      if (dashboardResult.status === "fulfilled") {
+        setDashboard(dashboardResult.value.data);
+      } else {
+        errors.push(`dashboard: ${dashboardResult.reason?.response?.data?.message || dashboardResult.reason?.message || "request failed"}`);
+      }
+
+      if (studentsResult.status === "fulfilled") {
+        setStudents(studentsResult.value.data);
+      } else {
+        errors.push(`students: ${studentsResult.reason?.response?.data?.message || studentsResult.reason?.message || "request failed"}`);
+      }
+
+      if (facultyResult.status === "fulfilled") {
+        setFaculty(facultyResult.value.data);
+      } else {
+        errors.push(`faculty: ${facultyResult.reason?.response?.data?.message || facultyResult.reason?.message || "request failed"}`);
+      }
+
+      if (subjectsResult.status === "fulfilled") {
+        setSubjects(subjectsResult.value.data);
+      } else {
+        errors.push(`subjects: ${subjectsResult.reason?.response?.data?.message || subjectsResult.reason?.message || "request failed"}`);
+      }
+
+      if (errors.length > 0) {
+        setError(`Some admin data could not load: ${errors.join(" | ")}`);
+      }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to load admin data");
+      setError(err.response?.data?.message || err.message || "Failed to load admin data");
     } finally {
       setLoading(false);
     }
@@ -169,12 +195,14 @@ function AdminDashboard() {
             </div>
           </form>
           <table>
-            <thead><tr><th>Roll</th><th>Name</th><th>Action</th></tr></thead>
+            <thead><tr><th>Roll</th><th>Name</th><th>Dept</th><th>Sem</th><th>Action</th></tr></thead>
             <tbody>
               {students.map((s) => (
                 <tr key={s.id}>
                   <td>{s.rollNo || s.roll_no}</td>
                   <td>{s.name}</td>
+                  <td>{s.department}</td>
+                  <td>{s.semester}</td>
                   <td>
                     <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
                       <button onClick={() => editStudent(s)}>Edit</button>
@@ -234,12 +262,14 @@ function AdminDashboard() {
             </div>
           </form>
           <table>
-            <thead><tr><th>Code</th><th>Name</th><th>Action</th></tr></thead>
+            <thead><tr><th>Code</th><th>Name</th><th>Sem</th><th>Faculty</th><th>Action</th></tr></thead>
             <tbody>
               {subjects.map((s) => (
                 <tr key={s.id}>
                   <td>{s.code}</td>
                   <td>{s.name}</td>
+                  <td>{s.semester}</td>
+                  <td>{s.faculty_name || "None"}</td>
                   <td>
                     <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
                       <button onClick={() => editSubject(s)}>Edit</button>
