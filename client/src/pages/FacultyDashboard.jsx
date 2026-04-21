@@ -9,19 +9,47 @@ function FacultyDashboard() {
   const [report, setReport] = useState(null);
   const [reportStudentId, setReportStudentId] = useState("");
   const [status, setStatus] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const [markForm, setMarkForm] = useState({ studentId: "", subjectId: "", marksObtained: "", maxMarks: "100", examType: "Internal" });
   const [attendanceForm, setAttendanceForm] = useState({ studentId: "", subjectId: "", attendedClasses: "", totalClasses: "" });
 
   useEffect(() => {
     async function load() {
-      const [studentRes, subjectRes] = await Promise.all([
+      setLoadError("");
+
+      const [studentRes, subjectRes] = await Promise.allSettled([
         api.get("/faculty/students"),
         api.get("/faculty/subjects")
       ]);
-      setStudents(studentRes.data);
-      setSubjects(subjectRes.data);
+
+      if (studentRes.status === "fulfilled") {
+        setStudents(studentRes.value.data);
+      } else {
+        setStudents([]);
+      }
+
+      if (subjectRes.status === "fulfilled") {
+        setSubjects(subjectRes.value.data);
+      } else {
+        setSubjects([]);
+      }
+
+      const errors = [];
+
+      if (studentRes.status === "rejected") {
+        errors.push(studentRes.reason?.response?.data?.message || studentRes.reason?.message || "Failed to load students");
+      }
+
+      if (subjectRes.status === "rejected") {
+        errors.push(subjectRes.reason?.response?.data?.message || subjectRes.reason?.message || "Failed to load subjects");
+      }
+
+      if (errors.length > 0) {
+        setLoadError(errors.join(" | "));
+      }
     }
+
     load();
   }, []);
 
@@ -66,6 +94,7 @@ function FacultyDashboard() {
       </header>
 
       {status ? <p className="ok">{status}</p> : null}
+      {loadError ? <p className="error">{loadError}</p> : null}
 
       <section className="two-col">
         <article className="card">
@@ -79,6 +108,7 @@ function FacultyDashboard() {
               <option value="">Select Subject</option>
               {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {!subjects.length ? <p className="muted">No subjects available yet.</p> : null}
             <input type="number" placeholder="Marks Obtained" value={markForm.marksObtained} onChange={(e) => setMarkForm((p) => ({ ...p, marksObtained: e.target.value }))} required />
             <input type="number" placeholder="Max Marks" value={markForm.maxMarks} onChange={(e) => setMarkForm((p) => ({ ...p, maxMarks: e.target.value }))} required />
             <input placeholder="Exam Type" value={markForm.examType} onChange={(e) => setMarkForm((p) => ({ ...p, examType: e.target.value }))} />
@@ -97,6 +127,7 @@ function FacultyDashboard() {
               <option value="">Select Subject</option>
               {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {!subjects.length ? <p className="muted">No subjects available yet.</p> : null}
             <input type="number" placeholder="Attended Classes" value={attendanceForm.attendedClasses} onChange={(e) => setAttendanceForm((p) => ({ ...p, attendedClasses: e.target.value }))} required />
             <input type="number" placeholder="Total Classes" value={attendanceForm.totalClasses} onChange={(e) => setAttendanceForm((p) => ({ ...p, totalClasses: e.target.value }))} required />
             <button type="submit">Save Attendance</button>
