@@ -14,26 +14,11 @@ const router = express.Router();
 
 router.use(authenticate, authorize("faculty"));
 
-router.get("/subjects", async (req, res) => {
+router.get("/subjects", async (_, res) => {
   try {
-    const filter = req.user.facultyId
-      ? {
-          $or: [
-            { facultyId: req.user.facultyId },
-            { facultyId: null }
-          ]
-        }
-      : {};
-
-    let subjects = await Subject.find(filter)
+    const subjects = await Subject.find()
       .sort({ _id: -1 })
       .lean();
-
-    if (subjects.length === 0) {
-      subjects = await Subject.find()
-        .sort({ _id: -1 })
-        .lean();
-    }
 
     return res.json(subjects.map(s => ({ ...s, id: s._id })));
   } catch (error) {
