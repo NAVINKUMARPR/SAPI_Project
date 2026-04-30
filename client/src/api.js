@@ -1,6 +1,7 @@
 import axios from "axios";
 
 const isBrowser = typeof window !== "undefined";
+const TOKEN_KEY = "sapi_token";
 
 function getDefaultApiBaseUrl() {
   if (!isBrowser) {
@@ -26,7 +27,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("sapi_token");
+  const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
